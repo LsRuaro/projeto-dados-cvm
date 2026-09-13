@@ -1,0 +1,4 @@
+.env
+raw/
+processed_csv/
+__pycache__/
