@@ -4,6 +4,21 @@ Pipeline automatizado em Python para extração, tratamento e carregamento (ETL)
 
 ---
 
+## Contexto e Próximos Passos
+
+Este repositório cobre as duas primeiras camadas de uma arquitetura de dados em três etapas:
+
+- **raw** — arquivos brutos da CVM, baixados por ano e mantidos localmente fora do banco.
+- **stg** — dados tratados e carregados no PostgreSQL, servindo como base histórica única e independente para análises específicas.
+- **camada de consumo** — lógica específica de cada projeto que utiliza esta base, como análises de negócios e indicadores financeiros, análises estatísticas ou treinamento de modelos preditivos, todas consumindo os dados da `stg`.
+
+A `stg` carrega **todas as empresas** que reportam à CVM, sem filtrar por setor, universo específico ou tipo de instituição (financeiras incluídas). Essa decisão é intencional: o objetivo é que esta base sirva como fundação reutilizável para diferentes análises, sem embutir premissas de nenhuma análise específica e sem precisar ser reconstruída a cada novo projeto. Cada consumidor define seu próprio recorte de empresas e suas próprias regras na `camada de consumo`.
+
+**Próximos passos deste pipeline:**
+- Avaliar a inclusão da Demonstração de Fluxo de Caixa pelo Método Direto (`DFC_MD`), hoje ausente para as empresas que não reportam pelo Método Indireto.
+
+---
+
 ## Arquitetura
 
 O pipeline é estruturado em três etapas principais:
@@ -61,6 +76,18 @@ Realiza o carregamento (Upsert) dos dados tratados na camada de *Staging* do ban
 | **BPP** | Balanço Patrimonial Passivo | `dfp_cia_aberta_BPP_con_{ano}.csv` | `stg_bpp` |
 | **DFC** | Fluxo de Caixa (Método Indireto) | `dfp_cia_aberta_DFC_MI_con_{ano}.csv` | `stg_dfc` |
 | **DRE** | Demonstração do Resultado do Exercício | `dfp_cia_aberta_DRE_con_{ano}.csv` | `stg_dre` |
+
+---
+
+## Validação de Integridade dos Dados
+
+Após a carga, foram executadas verificações para confirmar a integridade do parsing e mapear lacunas conhecidas na base (ver `notebooks/analise_processed_csv.ipynb`):
+
+- **Consistência entre demonstrações**: contagem de empresas distintas e intervalo de datas comparados entre `stg_bpa`, `stg_bpp` e `stg_dre`, confirmando cobertura equivalente — 739 empresas, com dados de 2010-12-31 a 2026-03-31.
+
+- **Identidade contábil (Ativo Total = Passivo Total)**: valores da conta `1` (Ativo Total) em `stg_bpa` comparados aos da conta `2` (Passivo Total) em `stg_bpp`, empresa a empresa e período a período. A identidade se confirma em toda a base, com apenas 2 divergências registradas em todo o histórico — ambas atribuíveis a arredondamento residual. Esse resultado é a evidência direta de que o parsing preserva a integridade dos dados originais da CVM.
+
+- **Cobertura de `stg_dfc`**: a tabela de Fluxo de Caixa cobre 713 das 739 empresas presentes nas demais demonstrações. A lacuna foi investigada e está associada a empresas que reportam pelo Método Direto (`DFC_MD`), formato ainda não carregado — apenas o Método Indireto (`DFC_MI`) está coberto atualmente. Essa lacuna é conhecida e tratada como dívida técnica documentada: não compromete o uso da base para as demais análises, e pode ser resolvida futuramente carregando também o `DFC_MD`, sem necessidade de reprocessar as tabelas já existentes.
 
 ---
 
